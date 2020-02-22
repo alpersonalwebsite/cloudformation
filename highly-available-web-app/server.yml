@@ -34,7 +34,7 @@ Resources:
   WebServerSecGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow http to our hosts and SSH from local only
+      GroupDescription: Allow http to our hosts
       VpcId:
         Fn::ImportValue: !Sub '${EnvironmentName}-VPCID'
       SecurityGroupIngress:

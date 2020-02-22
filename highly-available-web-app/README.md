@@ -12,5 +12,7 @@ aws cloudformation create-stack --stack-name HighlyAvailableWebAppServer --templ
 
 ## Deleting stacks
 ```terminal
+aws cloudformation delete-stack --stack-name HighlyAvailableWebAppNetwork
 
+aws cloudformation delete-stack --stack-name HighlyAvailableWebAppServer
 ```
