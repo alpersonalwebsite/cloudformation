@@ -1,0 +1,18 @@
+[
+  {
+    "ParameterKey": "EnvironmentName",
+    "ParameterValue": "HighAvailableWebAppWithBastionHost"
+  },
+  {
+    "ParameterKey": "S3Bucket",
+    "ParameterValue": "udacity-demo-1"
+  },
+  {
+    "ParameterKey": "S3BucketCode",
+    "ParameterValue": "udacity.zip"
+  },
+  {
+    "ParameterKey": "TheKeyPair",
+    "ParameterValue": "test"
+  }
+]
