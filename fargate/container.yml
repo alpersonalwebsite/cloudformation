@@ -1,0 +1,107 @@
+Description: Container
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+Resources:
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: web-app
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 256
+      Memory: 512
+      ExecutionRoleArn:
+        Fn::ImportValue: 
+          Fn::Sub: '${EnvironmentName}-ECSTaskExecutionRole'
+      ContainerDefinitions:
+        - Name: web-app
+          Image: 573882838883.dkr.ecr.us-east-1.amazonaws.com/web-app:latest
+          Cpu: 256
+          Memory: 512
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: 'web-app'
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: 'ecs'
+
+  Service:
+    Type: AWS::ECS::Service
+    DependsOn: ListenerRule
+    Properties:
+      ServiceName: web-app
+      TaskDefinition: !Ref TaskDefinition 
+      Cluster: 
+        Fn::ImportValue: 
+          Fn::Sub: '${EnvironmentName}-ECSCluster'
+      LaunchType: FARGATE
+      DesiredCount: 4
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 50
+        MaximumPercent: 200
+      DeploymentController: 
+        Type: ECS
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - Fn::ImportValue: 
+                Fn::Sub: '${EnvironmentName}-PUB1-SN'
+            - Fn::ImportValue: 
+                Fn::Sub: '${EnvironmentName}-PUB2-SN'
+          SecurityGroups: 
+            - Fn::ImportValue: 
+                Fn::Sub: '${EnvironmentName}-ContainersSecGroup'
+      LoadBalancers:
+        - ContainerName: web-app
+          ContainerPort: 8080
+          TargetGroupArn: !Ref TargetGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: 
+        Fn::ImportValue: 
+          Fn::Sub: '${EnvironmentName}-VPCID'
+      Port: 80
+      Protocol: HTTP
+      Matcher:
+        HttpCode: 200-299
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckPath: /healthcheck
+      HealthCheckProtocol: HTTP
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      TargetType: ip # for fargate
+
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: 
+        Fn::ImportValue: 
+          Fn::Sub: '${EnvironmentName}-Listener'
+      Priority: 2
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+
+ # Update this         
+# Outputs:
+#   ApiEndpoint:
+#     Description: web-app endpoint
+#     #Value: !Join ['', ['http://', !ImportValue DomainName, '/api/books']]
+#     Value: !Join ['', ['http://', !ImportValue DomainName, '/']]
+#     Export:
+#       Name: Fn::Sub: ${EnvironmentName}-web-app-endpoint

@@ -1,0 +1,149 @@
+Description: Cluster
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: 'web-app'
+
+  # LoadBalancer:
+  #   Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  #   Properties:
+  #     Name: ecs-services
+  #     Subnets:
+  #       - !ImportValue 'Subnet1'
+  #       - !ImportValue 'Subnet2'
+  #     SecurityGroups:
+  #       - !Ref LoadBalancerSecurityGroup
+
+  ContainersSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic to our containers
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-VPCID'
+      SecurityGroupIngress:
+        - SourceSecurityGroupId: !Ref 'LBSecGroup'
+          IpProtocol: -1
+
+  LBSecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to our load balancer
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-VPCID'
+      # SecurityGroupIngress:
+      #   - IpProtocol: tcp
+      #     FromPort: 80
+      #     ToPort: 80
+      #     CidrIp: 0.0.0.0/0
+      # SecurityGroupEgress:
+      #   - IpProtocol: tcp
+      #     FromPort: 80
+      #     ToPort: 80
+      #     CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: -1
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - Fn::ImportValue: !Sub '${EnvironmentName}-PUB1-SN'
+        - Fn::ImportValue: !Sub '${EnvironmentName}-PUB2-SN'
+      SecurityGroups:
+        - Ref: LBSecGroup
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref LoadBalancerTargetGroup
+      LoadBalancerArn:
+        Ref: LoadBalancer
+      Port: 80
+      Protocol: 'HTTP'
+
+  # LoadBalancerListener:
+  #   Type: AWS::ElasticLoadBalancingV2::Listener
+  #   Properties:
+  #     LoadBalancerArn: !Ref LoadBalancer
+  #     Protocol: HTTP
+  #     Port: 80
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref DefaultTargetGroup
+
+  LoadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 8
+      HealthyThresholdCount: 2
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 5
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: '${EnvironmentName}-VPCID'
+
+  # DefaultTargetGroup:
+  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  #   Properties:
+  #     Name: default
+  #     VpcId: !ImportValue 'VPC'
+  #     Protocol: 'HTTP'
+  #     Port: '80'
+  # CloudWatchLogsGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: 'apis'
+  #     RetentionInDays: 1
+  # ContainerSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #    VpcId: !ImportValue 'VPC'
+  #    GroupDescription: for ecs containers
+  #    SecurityGroupIngress:
+  #      - SourceSecurityGroupId: !Ref 'LoadBalancerSecurityGroup'
+  #        IpProtocol: -1
+
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: 'web-app'
+      RetentionInDays: 1
+
+
+Outputs:
+  Cluster:
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub ${EnvironmentName}-ECSCluster
+
+  LoadBalancerDNS:
+    Description: Load Balancers DNS endpoint
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub ${EnvironmentName}-LoadBalancerDNS
+
+  Listener:
+    Description: Load Balancer Listener
+    Value: !Ref Listener
+    Export:
+      Name: !Sub ${EnvironmentName}-Listener
+
+  ContainersSecGroup:
+    Description: Security Group for Containers
+    Value: !Ref ContainersSecGroup
+    Export:
+      Name: !Sub ${EnvironmentName}-ContainersSecGroup

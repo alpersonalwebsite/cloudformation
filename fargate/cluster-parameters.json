@@ -1,0 +1,7 @@
+[
+    {
+      "ParameterKey": "EnvironmentName",
+      "ParameterValue": "DockerECSonFargate"
+    }
+  ]
+  
