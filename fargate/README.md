@@ -21,13 +21,10 @@ aws cloudformation create-stack --stack-name DockerECSonFargateContainer --templ
 ```
 
 
-
-
-
-
 ## Deleting stacks
-```terminal
-aws cloudformation delete-stack --stack-name HighlyAvailableWebAppNetwork
 
-aws cloudformation delete-stack --stack-name HighlyAvailableWebAppServer
+Example:
+```terminal
+aws cloudformation delete-stack --stack-name DockerECSonFargateContainer
+
 ```
