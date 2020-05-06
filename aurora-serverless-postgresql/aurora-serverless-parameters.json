@@ -1,0 +1,35 @@
+[
+    {
+        "ParameterKey": "Service",
+        "ParameterValue": "YourService"
+    },
+    {
+      "ParameterKey": "VpcID",
+      "ParameterValue": "vpc-******"
+    },
+    {
+        "ParameterKey": "PrivateSubnet1CIDR",
+        "ParameterValue": "*.*.10.0/24"
+    },
+    {
+        "ParameterKey": "PrivateSubnet2CIDR",
+        "ParameterValue": "*.*.11.0/24"
+    },
+    {
+        "ParameterKey": "DatabaseName",
+        "ParameterValue": "YourDatabaseName"
+    },
+    {
+        "ParameterKey": "MasterUsername",
+        "ParameterValue": "ThisIsTheUser"
+    },
+    {
+        "ParameterKey": "MasterUserPassword",
+        "ParameterValue": "ThisIsThePassword"
+    },
+    {
+        "ParameterKey": "HostedZone",
+        "ParameterValue": "yourdomain.co."
+    }
+]
+  
