@@ -1,0 +1,15 @@
+[
+    {
+        "ParameterKey": "Service",
+        "ParameterValue": "YourService"
+    },
+    {
+      "ParameterKey": "VpcID",
+      "ParameterValue": "vpc-******"
+    },
+    {
+        "ParameterKey": "PublicSubnetCIDR",
+        "ParameterValue": "*.*.12.0/24"
+    }
+]
+  

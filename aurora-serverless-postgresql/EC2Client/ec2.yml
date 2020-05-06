@@ -1,0 +1,58 @@
+Description: CLIENT > Aurora Serverless cluster for YourService
+
+Parameters:
+  Service:
+    Description: Name of the Service
+    Type: String
+    Default: 'YourService'
+
+  VpcID:
+    Description: The VPC ID
+    Type: String
+    Default: vpc-******
+
+  PublicSubnetCIDR:
+    Description: IP range subnet AZ1
+    Type: String
+    Default: '*.*.12.0/24'
+
+Resources:
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcID
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public-sn
+        - Key: Service
+          Value: !Ref Service
+  
+  # Assumes there is a Production PUBLIC Routing table created with the provided Route table ID
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: 'rtb-********'
+      SubnetId: !Ref PublicSubnet
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: 'ami-0323c3dd2da7fb37d'
+      InstanceType: 't2.micro'
+      # Assumes you have this key or you are going to create it
+      KeyName: 'YourServiceClientKP'
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: 'true'
+          DeviceIndex: '0'
+          GroupSet:
+            - Fn::ImportValue: !Sub '${Service}-db-CLIENT-SEC-GROUP'
+          SubnetId:
+            Ref: 'PublicSubnet'
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ec2
+        - Key: Service
+          Value: !Ref Service
