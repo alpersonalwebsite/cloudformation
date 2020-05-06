@@ -1,0 +1,175 @@
+Description: Aurora Serverless cluster for YourService
+
+Parameters:
+  Service:
+    Description: Name of the Service
+    Type: String
+    Default: 'YourService'
+
+  VpcID:
+    Description: The VPC ID
+    Type: String
+    Default: vpc-******
+
+  PrivateSubnet1CIDR:
+    Description: IP range subnet AZ1
+    Type: String
+    Default: '*.*.10.0/24'
+
+  PrivateSubnet2CIDR:
+    Description: IP range subnet AZ2
+    Type: String
+    Default: '*.*.11.0/24'
+
+  MasterUsername:
+    Description: DB master username
+    Type: String
+
+  MasterUserPassword:
+    Description: DB master password
+    Type: String
+
+  DatabaseName:
+    Description: DB name
+    Type: String
+
+  HostedZone:
+    Description: Hosted Zone
+    Type: String
+
+Resources:
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcID
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-sn1
+        - Key: Service
+          Value: !Ref Service
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Sub ${VpcID}
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-sn2
+        - Key: Service
+          Value: !Ref Service
+
+  ClusterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${AWS::StackName} security group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref ClientSecurityGroup
+      VpcId: !Sub ${VpcID}
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-sec-group
+        - Key: Service
+          Value: !Ref Service
+
+  ClientSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${AWS::StackName} CLIENT security group
+      VpcId: !Sub ${VpcID}
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-CLIENT-sec-group
+        - Key: Service
+          Value: !Ref Service
+
+  myDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub ${AWS::StackName} subnet group
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-subnet-group
+        - Key: Service
+          Value: !Ref Service
+
+  RDSCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
+      DatabaseName: !Ref DatabaseName # check naming constraints in Amazon RDS
+      EnableHttpEndpoint: true
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      EngineVersion: 10.7
+      BackupRetentionPeriod: 35
+      DeletionProtection: false # turn true once it is final
+      StorageEncrypted: true
+      ScalingConfiguration:
+        AutoPause: true
+        MaxCapacity: 16 # aka, 32GB of RAM
+        MinCapacity: 2 # aka, 4GB of RAM
+        SecondsUntilAutoPause: 500
+      DBSubnetGroupName: !Ref myDBSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref ClusterSecurityGroup
+      # Note: Value of property VpcSecurityGroupIds must be of type List of String
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-aurora-sls
+        - Key: Service
+          Value: !Ref Service
+
+  CNAME:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneName: !Ref HostedZone
+      Comment: CNAME for !Sub ${AWS::StackName}
+      RecordSets:
+        - Name: !Join
+            - ''
+            - - !Sub ${AWS::StackName}
+              - '.'
+              - !Ref HostedZone
+          Type: CNAME
+          TTL: '60'
+          ResourceRecords:
+            - !GetAtt RDSCluster.Endpoint.Address
+
+Outputs:
+
+  CNAME:
+    Description: Endpoint to connect to the Cluster
+    Value: !Join
+            - ''
+            - - !Sub ${AWS::StackName}
+              - '.'
+              - !Ref HostedZone
+    Export:
+      Name: !Sub ${Service}-db-CNAME
+
+  ClientSecurityGroup:
+    Description: Security Group for CLIENT
+    Value: !Ref ClientSecurityGroup
+    Export:
+      Name: !Sub ${Service}-db-CLIENT-SEC-GROUP
