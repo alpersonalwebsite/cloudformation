@@ -2,23 +2,19 @@
 
 ## Creating AURORA stack
 ```shell
-aws cloudformation create-stack --stack-name aurora-postgresql-sql --template-body file://aurora-serverless.yml --parameters file://aurora-serverless-parameters.json
-```
-
-```
-redis-cli -h prod-ec-redis-cocina.seasoned.co -p 6379
+aws cloudformation create-stack --stack-name aurora-postgresql-sls --template-body file://aurora-serverless.yml --parameters file://aurora-serverless-parameters.json
 ```
 
 ## Updating AURORA stack
 ```shell
-aws cloudformation update-stack --stack-name aurora-postgresql-sql  --template-body file://aurora-serverless.yml --parameters file://aurora-serverless-parameters.json
+aws cloudformation update-stack --stack-name aurora-postgresql-sls  --template-body file://aurora-serverless.yml --parameters file://aurora-serverless-parameters.json
 ```
 
 ## Deleting AURORA stack
 
 Example:
 ```shell
-aws cloudformation delete-stack --stack-name aurora-postgresql-sql
+aws cloudformation delete-stack --stack-name aurora-postgresql-sls
 ```
 
 ### Notes
