@@ -20,11 +20,9 @@ aws cloudformation create-stack --stack-name DockerECSonFargateCluster --templat
 aws cloudformation create-stack --stack-name DockerECSonFargateContainer --template-body file://container.yml --parameters file://container-parameters.json
 ```
 
-
 ## Deleting stacks
 
 Example:
 ```terminal
 aws cloudformation delete-stack --stack-name DockerECSonFargateContainer
-
 ```
