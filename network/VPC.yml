@@ -1,0 +1,24 @@
+Description: Network > VPC
+
+Parameters:
+  EnvironmentName:
+    Description: An environment name that will be prefixed to resource names
+    Type: String
+
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: 'default'
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-vpc
+        - Key: Tier
+          Value: !Sub ${EnvironmentName}

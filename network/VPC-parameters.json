@@ -1,0 +1,11 @@
+[
+    {
+      "ParameterKey": "EnvironmentName",
+      "ParameterValue": "Production"
+    },
+    {
+        "ParameterKey": "VpcCIDR",
+        "ParameterValue": "10.0.0.0/16"
+    }
+  ]
+  
