@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create a DB replica in the other region
+
+Parameters:
+  DBInstanceID:
+    Default: mydbinstancereplica
+    Description: My database instance
+    Type: String
+    MinLength: '1'
+    MaxLength: '63'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: >-
+      Must begin with a letter and must not end with a hyphen or contain two
+      consecutive hyphens.
+  DBInstanceClass:
+    Default: db.t2.micro
+    Description: DB instance class
+    Type: String
+    ConstraintDescription: Must select a valid DB instance type.
+  DBName:
+    Default: mydb
+    Description: My database
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+
+Resources:
+  myDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: UD Subnet Group
+      SubnetIds:
+        - Fn::ImportValue: !Sub 'Secondary-PRIV1-SN'
+        - Fn::ImportValue: !Sub 'Secondary-PRIV2-SN'
+
+  MyDBreplica: 
+    Type: 'AWS::RDS::DBInstance'
+    Properties: 
+      DBInstanceIdentifier: !Ref DBInstanceID
+      DBName: !Ref DBName
+      DBInstanceClass: !Ref DBInstanceClass
+      SourceDBInstanceIdentifier: arn:aws:rds:us-east-1:your-admin-account-id:db:mydbinstance
+      SourceRegion: us-east-1
+      DBSubnetGroupName: !Ref myDBSubnetGroup
+      # MonitoringInterval: '60'
+      # MonitoringRoleArn: !Ref MyDBRole
+      VPCSecurityGroups:
+        - Fn::ImportValue: !Sub 'Secondary-DatabaseSecurityGroup'

@@ -1,0 +1,36 @@
+Description: Client for RDS
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0323c3dd2da7fb37d
+    us-west-1:
+      AMI: ami-06fcc1f0bc2c8943f
+
+Parameters:
+  VPCname:
+    Description: VPC name
+    Type: String
+
+Resources:
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI]
+      InstanceType: t2.micro
+      UserData:
+        'Fn::Base64':
+          !Sub |
+            #!/bin/bash
+            # Update all packages
+            yum -y update
+            # Install mysql client 
+            yum -y install mysql
+      KeyName: udacityProject
+      SubnetId:
+        Fn::ImportValue: !Sub ${VPCname}-PUB1-SN
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub ${VPCname}-ApplicationSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${VPCname}-RDS-client

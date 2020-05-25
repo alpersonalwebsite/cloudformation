@@ -1,0 +1,15 @@
+[
+    {
+        "ParameterKey": "DBName",
+        "ParameterValue": "udacity"
+    },
+    {
+      "ParameterKey": "DBUsername",
+      "ParameterValue": "dbuser"
+    },
+    {
+      "ParameterKey": "DBPassword",
+      "ParameterValue": "******"
+    }
+  ]
+  
