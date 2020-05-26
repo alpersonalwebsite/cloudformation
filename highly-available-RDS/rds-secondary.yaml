@@ -30,7 +30,7 @@ Resources:
   myDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: UD Subnet Group
+      DBSubnetGroupDescription: DB Subnet Group
       SubnetIds:
         - Fn::ImportValue: !Sub 'Secondary-PRIV1-SN'
         - Fn::ImportValue: !Sub 'Secondary-PRIV2-SN'

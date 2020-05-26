@@ -1,7 +1,7 @@
 [
     {
         "ParameterKey": "DBName",
-        "ParameterValue": "udacity"
+        "ParameterValue": "mydb"
     },
     {
       "ParameterKey": "DBUsername",

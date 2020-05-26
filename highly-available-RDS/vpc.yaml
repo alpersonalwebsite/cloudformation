@@ -172,8 +172,8 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Udacity ARR Project - Database Security Group
-      GroupName: UDARR-Database
+      GroupDescription: Database Security Group
+      GroupName: SecGroup-Database
       SecurityGroupIngress:
         - Description: Application EC2 instances
           FromPort: 3306
@@ -183,13 +183,13 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: UDARR-Database
+          Value: SecGroup-Database
 
   ApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Udacity ARR Project - Application Security Group
-      GroupName: UDARR-Application
+      GroupDescription: Application Security Group
+      GroupName: SecGroup-Application
       SecurityGroupIngress:
         - Description: SSH from the Internet
           FromPort: 22
@@ -199,7 +199,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: UDARR-Application
+          Value: SecGroup-Application
 
 Outputs:
   VPC:

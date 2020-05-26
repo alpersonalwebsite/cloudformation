@@ -26,7 +26,7 @@ Resources:
             yum -y update
             # Install mysql client 
             yum -y install mysql
-      KeyName: udacityProject
+      KeyName: MyStackSetProject
       SubnetId:
         Fn::ImportValue: !Sub ${VPCname}-PUB1-SN
       SecurityGroupIds:
