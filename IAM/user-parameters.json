@@ -1,0 +1,14 @@
+[
+  {
+    "ParameterKey": "UserName",
+    "ParameterValue": "your.user"
+  },
+  {
+    "ParameterKey": "UserPassword",
+    "ParameterValue": "********"
+  },
+  {
+    "ParameterKey": "Department",
+    "ParameterValue": "Marketing"
+  }
+]
