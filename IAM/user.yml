@@ -23,7 +23,7 @@ Resources:
           Value: !Ref Department
 
   BasicCustomIAMPermissions:
-    Type: 'AWS::IAM::Policy'
+    Type: AWS::IAM::Policy
     Properties:
       PolicyName: OwnAccessKeysAndMFA
       PolicyDocument:

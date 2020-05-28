@@ -1,0 +1,53 @@
+Description: Group and policies related to ECR
+
+Parameters:
+  ECRrepository:
+    Description: Name of the repository
+    Type: String
+
+Resources:
+  ECRGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: ECRGroup
+
+  ECRGroupPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: ReadWriteECR-the-repository-name
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchCheckLayerAvailability
+              - ecr:PutImage
+              - ecr:InitiateLayerUpload
+              - ecr:UploadLayerPart
+              - ecr:CompleteLayerUpload
+              - ecr:ListImages
+              - ecr:BatchGetImage
+              - ecr:DescribeImages
+              - ecr:DescribeRepositories
+            Resource: !Join
+              - ''
+              - - 'arn:aws:ecr:'
+                - !Ref AWS::Region
+                - ':'
+                - !Ref AWS::AccountId
+                - ':repository/'
+                - !Ref ECRrepository
+          - Effect: Allow
+            Action:
+              - ecr:GetAuthorizationToken
+            Resource: '*'
+      Groups:
+        - !Ref ECRGroup
+
+  AddUserToGroup:
+    Type: AWS::IAM::UserToGroupAddition
+    Properties:
+      GroupName: !Ref ECRGroup
+      Users:
+        - your.user

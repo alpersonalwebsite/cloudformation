@@ -1,0 +1,6 @@
+[
+  {
+    "ParameterKey": "ECRrepository",
+    "ParameterValue": "the-repository"
+  }
+]
