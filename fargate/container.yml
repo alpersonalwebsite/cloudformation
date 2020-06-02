@@ -20,7 +20,7 @@ Resources:
           Fn::Sub: '${EnvironmentName}-ECSTaskExecutionRole'
       ContainerDefinitions:
         - Name: web-app
-          Image: 573882838883.dkr.ecr.us-east-1.amazonaws.com/web-app:latest
+          Image: your-aws-account-id.dkr.ecr.us-east-1.amazonaws.com/web-app:latest
           Cpu: 256
           Memory: 512
           PortMappings:
