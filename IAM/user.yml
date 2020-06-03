@@ -3,10 +3,14 @@ Description: Creating a User with some basic permissions
 Parameters:
   UserName:
     Description: Username
+    NoEcho: true
     Type: String
+
   UserPassword:
     Description: User password
+    NoEcho: true
     Type: String
+
   Department:
     Description: User belongs to...?
     Type: String

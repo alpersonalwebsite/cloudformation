@@ -23,10 +23,12 @@ Parameters:
 
   MasterUsername:
     Description: DB master username
+    NoEcho: true
     Type: String
 
   MasterUserPassword:
     Description: DB master password
+    NoEcho: true
     Type: String
 
   DatabaseName:
