@@ -26,14 +26,45 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
 
+  # The source used to be hardcoded as
+  # arn:aws:rds:us-east-1:your-admin-account-id:db:mydbinstance, so the template could
+  # not deploy without editing it, and the placeholder account id was easy to miss.
+  SourceDBInstanceID:
+    Default: mydbinstance
+    Description: Identifier of the primary DB instance being replicated.
+    Type: String
+    MinLength: 1
+  SourceDBRegion:
+    Default: us-east-1
+    Description: Region the primary DB instance lives in.
+    Type: String
+    MinLength: 1
+
+  MonitoringRoleName:
+    Description: >-
+      Name of the enhanced monitoring role created by the primary stack (MyDBRole). IAM
+      is global, so the replica reuses it instead of creating a duplicate.
+    Type: String
+    Default: MyDBEnhancedMonitoringRole
+    MinLength: 1
+
+  VpcName:
+    Description: >-
+      The VpcName the VPC stack was deployed with. Its exports are named
+      <VpcName>-PRIV1-SN and so on, so this has to match or Fn::ImportValue fails at
+      create time with "No export named ... found".
+    Type: String
+    Default: Secondary
+    MinLength: 1
+
 Resources:
   myDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: DB Subnet Group
       SubnetIds:
-        - Fn::ImportValue: !Sub 'Secondary-PRIV1-SN'
-        - Fn::ImportValue: !Sub 'Secondary-PRIV2-SN'
+        - Fn::ImportValue: !Sub '${VpcName}-PRIV1-SN'
+        - Fn::ImportValue: !Sub '${VpcName}-PRIV2-SN'
 
   MyDBreplica: 
     Type: 'AWS::RDS::DBInstance'
@@ -41,10 +72,31 @@ Resources:
       DBInstanceIdentifier: !Ref DBInstanceID
       DBName: !Ref DBName
       DBInstanceClass: !Ref DBInstanceClass
-      SourceDBInstanceIdentifier: arn:aws:rds:us-east-1:your-admin-account-id:db:mydbinstance
-      SourceRegion: us-east-1
+      SourceDBInstanceIdentifier: !Sub arn:${AWS::Partition}:rds:${SourceDBRegion}:${AWS::AccountId}:db:${SourceDBInstanceID}
+      SourceRegion: !Ref SourceDBRegion
+      # No StorageEncrypted here. A read replica inherits encryption from its source,
+      # and setting it is rejected: cfn-lint E3020, "'StorageEncrypted' should not be
+      # included with 'SourceDBInstanceIdentifier'". The primary sets it, so the replica
+      # is encrypted too. checkov CKV_AWS_16 still flags this resource, which is a false
+      # positive for a replica.
+      CopyTagsToSnapshot: true
       DBSubnetGroupName: !Ref myDBSubnetGroup
-      # MonitoringInterval: '60'
-      # MonitoringRoleArn: !Ref MyDBRole
+      # Enhanced monitoring (checkov CKV_AWS_118). MyDBRole lives in the primary stack
+      # and IAM is global, so this reuses that role by name rather than creating a second
+      # one; two roles with the same RoleName in one account collide whatever region the
+      # stacks are in.
+      MonitoringInterval: 60
+      MonitoringRoleArn: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${MonitoringRoleName}'
       VPCSecurityGroups:
-        - Fn::ImportValue: !Sub 'Secondary-DatabaseSecurityGroup'
+        - Fn::ImportValue: !Sub '${VpcName}-DatabaseSecurityGroup'
+
+Outputs:
+  # The endpoint was only discoverable from the console or a describe-db-instances call.
+  # An output means the README can show a copy-pasteable connect command.
+  DBEndpoint:
+    Description: Connection endpoint for the read replica
+    Value: !GetAtt MyDBreplica.Endpoint.Address
+
+  DBPort:
+    Description: Port the database listens on
+    Value: !GetAtt MyDBreplica.Endpoint.Port

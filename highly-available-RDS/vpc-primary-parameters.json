@@ -4,6 +4,10 @@
     "ParameterValue": "Primary"
   },
   {
+    "ParameterKey": "AdminCidr",
+    "ParameterValue": "203.0.113.10/32"
+  },
+  {
     "ParameterKey": "VpcCIDR",
     "ParameterValue": "10.1.0.0/16"
   },

@@ -1,0 +1,33 @@
+# Parameter files with REAL values. The *-parameters.json files in this repo are
+# templates with masked values; copy one to *-parameters.local.json, fill it in, and
+# deploy from that. Without this, filling in a password means committing it.
+*-parameters.local.json
+*.local.json
+
+# Secrets and keys
+.env
+.env.*
+secrets/
+credentials*
+*.pem
+*.key
+*.ppk
+
+# Logs, local databases and dependency directories. Nothing here builds either of the
+# latter two today, but a helper script or a scratch venv is one commit away.
+*.log
+node_modules/
+__pycache__/
+*.sqlite
+*.sqlite3
+*.db
+
+# CloudFormation / AWS CLI scratch
+packaged.yml
+packaged.yaml
+*.out
+
+# macOS / editors
+.DS_Store
+.vscode/
+.idea/

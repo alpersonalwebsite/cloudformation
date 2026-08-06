@@ -4,32 +4,31 @@
         "ParameterValue": "YourService"
     },
     {
-      "ParameterKey": "VpcID",
-      "ParameterValue": "vpc-******"
+        "ParameterKey": "VpcID",
+        "ParameterValue": "vpc-0123456789abcdef0"
     },
     {
         "ParameterKey": "PrivateSubnet1CIDR",
-        "ParameterValue": "*.*.10.0/24"
+        "ParameterValue": "10.0.10.0/24"
     },
     {
         "ParameterKey": "PrivateSubnet2CIDR",
-        "ParameterValue": "*.*.11.0/24"
+        "ParameterValue": "10.0.11.0/24"
     },
     {
         "ParameterKey": "DatabaseName",
         "ParameterValue": "YourDatabaseName"
     },
     {
-        "ParameterKey": "MasterUsername",
-        "ParameterValue": "ThisIsTheUser"
-    },
-    {
-        "ParameterKey": "MasterUserPassword",
-        "ParameterValue": "ThisIsThePassword"
-    },
-    {
         "ParameterKey": "HostedZone",
         "ParameterValue": "yourdomain.co."
+    },
+    {
+        "ParameterKey": "DBSecretName",
+        "ParameterValue": "aurora/master"
+    },
+    {
+        "ParameterKey": "AdminCidr",
+        "ParameterValue": "203.0.113.10/32"
     }
 ]
-  

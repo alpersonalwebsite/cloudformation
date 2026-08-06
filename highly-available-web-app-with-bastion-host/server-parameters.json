@@ -14,5 +14,13 @@
   {
     "ParameterKey": "TheKeyPair",
     "ParameterValue": "test"
+  },
+  {
+    "ParameterKey": "AdminCidr",
+    "ParameterValue": "203.0.113.10/32"
+  },
+  {
+    "ParameterKey": "CertificateArn",
+    "ParameterValue": ""
   }
 ]

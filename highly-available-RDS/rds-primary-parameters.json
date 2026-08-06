@@ -4,12 +4,11 @@
         "ParameterValue": "mydb"
     },
     {
-      "ParameterKey": "DBUsername",
-      "ParameterValue": "dbuser"
+        "ParameterKey": "DBSecretName",
+        "ParameterValue": "rds/primary"
     },
     {
-      "ParameterKey": "DBPassword",
-      "ParameterValue": "******"
+        "ParameterKey": "VpcName",
+        "ParameterValue": "Primary"
     }
-  ]
-  
+]

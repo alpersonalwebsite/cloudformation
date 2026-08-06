@@ -10,5 +10,9 @@
   {
     "ParameterKey": "S3BucketCode",
     "ParameterValue": "udacity.zip"
+  },
+  {
+    "ParameterKey": "CertificateArn",
+    "ParameterValue": ""
   }
 ]

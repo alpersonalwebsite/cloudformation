@@ -13,6 +13,20 @@ Parameters:
     Description: The bundle with our static files
     Type: String
 
+  CertificateArn:
+    Description: >-
+      ARN of an ACM certificate in this region, for the HTTPS listener. Leave it empty and
+      the stack deploys HTTP only, exactly as the original template did. Supply one and a
+      TLS 1.2 listener is added on 443 and port 80 becomes a 301 redirect to it.
+    Type: String
+    Default: ''
+
+Conditions:
+  # An HTTPS listener needs a certificate, and there is no sensible default for one, so
+  # the TLS resources are conditional rather than mandatory. That keeps `aws cloudformation
+  # deploy` working for someone reading this repo who has no certificate to hand.
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+
 Resources: 
   LBSecGroup:
     Type: AWS::EC2::SecurityGroup
@@ -25,11 +39,13 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: HTTP from anywhere, which is what a public load balancer is for
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: HTTP to the web server targets
 
   WebServerSecGroup:
     Type: AWS::EC2::SecurityGroup
@@ -38,15 +54,19 @@ Resources:
       VpcId:
         Fn::ImportValue: !Sub '${EnvironmentName}-VPCID'
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        # Sourced from the load balancer's group rather than 0.0.0.0/0: the instances
+        # sit in private subnets and only the LB should reach them.
+        - SourceSecurityGroupId: !Ref LBSecGroup
+          IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          Description: HTTP from the load balancer only
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 0
           ToPort: 65535
           CidrIp: 0.0.0.0/0
+          Description: All outbound, needed to fetch packages and the app bundle
 
   UdacityS3ReadOnlyEC2:
     Type: 'AWS::IAM::Role'
@@ -102,6 +122,10 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: '/dev/sdk'
           Ebs:
+            # Encrypted at rest (checkov CKV_AWS_8). Encryption can only be set when the
+            # volume is created, so an existing stack needs replacement, not an update.
+            Encrypted: true
+            VolumeType: gp2
             VolumeSize: '10'
   
   WebAppGroup:
@@ -128,17 +152,57 @@ Resources:
         - Fn::ImportValue: !Sub '${EnvironmentName}-PUB2-SN'
       SecurityGroups:
         - Ref: LBSecGroup
+      LoadBalancerAttributes:
+        # Access logging (checkov CKV_AWS_91). Without it there is no record of what was
+        # requested, which is the one thing you want after an incident.
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref LBAccessLogsBucket
+        # Headers that are not valid HTTP are dropped instead of being handed to the
+        # targets (checkov CKV_AWS_131), which is what closes the desync/smuggling class
+        # of tricks where the load balancer and the backend disagree on a request.
+        - Key: routing.http.drop_invalid_header_fields.enabled
+          Value: 'true'
+    # The bucket policy must exist before the load balancer, because Elastic Load
+    # Balancing writes a test object at creation time and fails the stack if it cannot.
+    DependsOn: LBAccessLogsBucketPolicy
   
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
+      # With a certificate, port 80 exists only to send clients to 443. Without one it
+      # forwards, so the demo still works over plain HTTP.
+      DefaultActions: !If
+        - HasCertificate
+        - - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              StatusCode: HTTP_301
+        - - Type: forward
+            TargetGroupArn: !Ref WebAppTargetGroup
+      LoadBalancerArn:
+        Ref: WebAppLB
+      Port: 80
+      Protocol: 'HTTP'
+  # TLS 1.2 only (checkov CKV_AWS_2 and CKV_AWS_103). ELBSecurityPolicy-TLS-1-2-2017-01
+  # is the oldest policy that excludes TLS 1.0 and 1.1 outright, so it is both correct
+  # and available to a template of this vintage.
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasCertificate
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref WebAppTargetGroup
       LoadBalancerArn:
         Ref: WebAppLB
-      Port: 80
-      Protocol: 'HTTP'
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
   
   ALBListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
@@ -149,7 +213,8 @@ Resources:
       Conditions:
         - Field: path-pattern
           Values: [/]
-      ListenerArn: !Ref 'Listener'
+      # Attach to the HTTPS listener when there is one; port 80 only redirects then.
+      ListenerArn: !If [HasCertificate, !Ref HttpsListener, !Ref Listener]
       Priority: 1
   
   WebAppTargetGroup:
@@ -166,6 +231,69 @@ Resources:
       VpcId:
         Fn::ImportValue:
           Fn::Sub: '${EnvironmentName}-VPCID'
+
+
+  LBAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    # No BucketName: the name is generated. EnvironmentName carries capitals in the
+    # committed parameter files and bucket names must be lowercase.
+    Properties:
+      # SSE-S3. ALB access log delivery accepted only SSE-S3 when these templates were
+      # written; AWS has since added SSE-KMS with a customer managed key. AES256 stays
+      # the right default here because it needs no key, no key policy and no bill.
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-access-logs
+            Status: Enabled
+            # ExpirationInDays alone does NOT bound storage in a versioned bucket. It
+            # applies to the current version: S3 writes a delete marker and the object
+            # becomes noncurrent, keeping the data. Without the noncurrent rule below,
+            # the bucket grows forever and the 90 days means nothing, which for access
+            # logs is the workload that accumulates fastest.
+            ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+    Metadata:
+      checkov:
+        skip:
+          - id: CKV_AWS_18
+            comment: >-
+              This IS the log bucket. S3 server access logging on it would either need a
+              second bucket that has the same problem, or point at itself and log its own
+              log writes forever.
+
+  LBAccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LBAccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # The log delivery service principal, which is what AWS documents today and
+          # which works in every region. Regions that existed before August 2022 also
+          # still accept the older policy naming a per-region Elastic Load Balancing
+          # account ID; see the README.
+          - Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:${AWS::Partition}:s3:::${LBAccessLogsBucket}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              ArnLike:
+                # Only load balancers in this account and region may write here.
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*'
 
 Outputs:
   WebAppLB:

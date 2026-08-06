@@ -20,16 +20,36 @@ Resources:
       Policies:
         - PolicyName: AmazonECSTaskExecutionRolePolicy
           PolicyDocument:
+            Version: 2012-10-17
             Statement:
-            - Effect: Allow
+            # One statement with Resource: '*' covering all six actions was the original
+            # (checkov CKV_AWS_111). It is split three ways now, because only the first
+            # action genuinely has no resource to name.
+            - Sid: EcrAuthToken
+              Effect: Allow
+              # ecr:GetAuthorizationToken is account-scoped by design: there is no
+              # resource ARN for it, so '*' here is correct rather than lazy.
+              Action: 'ecr:GetAuthorizationToken'
+              Resource: '*'
+            - Sid: PullImagesFromThisAccount
+              Effect: Allow
               Action:
-                - 'ecr:GetAuthorizationToken'
                 - 'ecr:BatchCheckLayerAvailability'
                 - 'ecr:GetDownloadUrlForLayer'
                 - 'ecr:BatchGetImage'
+              # Repositories in this account and region only. Narrow it further to the
+              # single repository you actually deploy from if you know its name.
+              Resource: !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/*'
+            - Sid: WriteTaskLogs
+              Effect: Allow
+              Action:
                 - 'logs:CreateLogStream'
                 - 'logs:PutLogEvents'
-              Resource: '*'
+              # The log group cluster.yml creates, and its streams. Not every log group
+              # in the account, which is what '*' granted.
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:web-app'
+                - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:web-app:log-stream:*'
 
 Outputs:
   ECSTaskExecutionRole:
