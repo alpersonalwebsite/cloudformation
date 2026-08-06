@@ -13,6 +13,15 @@ credentials*
 *.key
 *.ppk
 
+# Logs, local databases and dependency directories. Nothing here builds either of the
+# latter two today, but a helper script or a scratch venv is one commit away.
+*.log
+node_modules/
+__pycache__/
+*.sqlite
+*.sqlite3
+*.db
+
 # CloudFormation / AWS CLI scratch
 packaged.yml
 packaged.yaml
