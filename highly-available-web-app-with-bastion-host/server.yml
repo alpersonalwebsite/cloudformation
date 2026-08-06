@@ -304,8 +304,9 @@ Resources:
     # No BucketName: the name is generated. EnvironmentName carries capitals in the
     # committed parameter files and bucket names must be lowercase.
     Properties:
-      # ALB access log delivery supports SSE-S3 only. A KMS key here makes delivery fail
-      # with an access-denied that is very hard to trace back to encryption.
+      # SSE-S3. ALB access log delivery accepted only SSE-S3 when these templates were
+      # written; AWS has since added SSE-KMS with a customer managed key. AES256 stays
+      # the right default here because it needs no key, no key policy and no bill.
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -321,7 +322,15 @@ Resources:
         Rules:
           - Id: expire-old-access-logs
             Status: Enabled
+            # ExpirationInDays alone does NOT bound storage in a versioned bucket. It
+            # applies to the current version: S3 writes a delete marker and the object
+            # becomes noncurrent, keeping the data. Without the noncurrent rule below,
+            # the bucket grows forever and the 90 days means nothing, which for access
+            # logs is the workload that accumulates fastest.
             ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
     Metadata:
       checkov:
         skip:

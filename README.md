@@ -84,8 +84,11 @@ the same region and the stack instead:
 - attaches the listener rules to the HTTPS listener rather than the HTTP one.
 
 Access logging and `routing.http.drop_invalid_header_fields.enabled` are on either way.
-Each load balancer template creates its own log bucket with SSE-S3 encryption (the only
-algorithm ALB log delivery supports), public access blocked, and a 90 day expiry.
+Each load balancer template creates its own log bucket: SSE-S3 encryption, public access
+blocked, versioned, current versions expiring at 90 days and noncurrent ones the day
+after. SSE-S3 was the only algorithm ALB log delivery accepted when these templates were
+written; AWS has since added SSE-KMS with a customer managed key, but AES256 stays the
+right default here because it needs no key, no key policy and no bill.
 
 ### Dependencies between stacks are parameters, not hardcoded names
 
