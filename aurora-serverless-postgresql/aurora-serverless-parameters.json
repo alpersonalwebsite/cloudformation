@@ -21,11 +21,11 @@
     },
     {
         "ParameterKey": "MasterUsername",
-        "ParameterValue": "ThisIsTheUser"
+        "ParameterValue": "yourdbuser"
     },
     {
         "ParameterKey": "MasterUserPassword",
-        "ParameterValue": "ThisIsThePassword"
+        "ParameterValue": "********"
     },
     {
         "ParameterKey": "HostedZone",
