@@ -63,7 +63,10 @@ yum clean metadata
 sudo yum install postgresql
 ```
 
-*Note:* Remember -currently- Aurora Serverless (postgresql) supports `PostgreSQL version 10.7 `
+*Note:* This was written when Aurora Serverless (postgresql) supported `PostgreSQL version
+10.7`, which is what `aurora-serverless.yml` still pins. RDS no longer accepts 10.7 for
+new clusters, so raise `EngineVersion` (and this client's `postgresql10` extra) to match
+whatever `aws rds describe-db-engine-versions --engine aurora-postgresql` returns today.
 
 [You can check other limitations...](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless.html#aurora-serverless.limitations)
 
@@ -73,6 +76,14 @@ sudo yum install postgresql
 psql -h the-db-endpoint-or-cname -U ThisIsTheUser -d YourDatabaseName
 ```
 
-Then, enter the password defined in `aurora-serverless-parameters.json`. Example: `ThisIsThePassword`
+`psql` then prompts for the password. It is no longer in
+`aurora-serverless-parameters.json`: the cluster reads both the username and the password
+from Secrets Manager at deploy time, so read them back from there rather than from a file
+in the repo.
+
+```shell
+aws secretsmanager get-secret-value --secret-id aurora/master \
+  --query SecretString --output text
+```
 
 If you want to exit from `PostgreSQL command line utility`, type: `\q`

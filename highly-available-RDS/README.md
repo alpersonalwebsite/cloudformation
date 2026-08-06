@@ -1,6 +1,36 @@
 
 # Highly Available and resilient RDS
 
+A MySQL primary in one region, a read replica in another, and the VPCs for both deployed
+as a StackSet. The point of the walkthrough is the last section: promoting the replica.
+
+## Before you start
+
+**Replace `your-admin-account-id`** everywhere it appears below with your own account id
+(`aws sts get-caller-identity --query Account --output text`). It appears in the execution
+role, in `create-stack-instances`, and in `delete-stack-instances`.
+
+**Create the database secret.** `rds-primary.yaml` does not take a username or password as
+a parameter. It reads both from Secrets Manager at deploy time with a dynamic reference,
+so neither value appears in the template, the stack events or a `describe-stacks`
+response. Create it with the name you pass as `DBSecretName` (`rds/primary` in the
+committed parameter file):
+
+```shell
+aws secretsmanager create-secret --name rds/primary \
+  --secret-string "{\"username\":\"dbuser\",\"password\":\"$(openssl rand -base64 24)\"}"
+```
+
+**Know which parameters tie the stacks together.** `Fn::ImportValue` needs the exporting
+stack's names to match:
+
+| Parameter | Default | Has to match |
+| --- | --- | --- |
+| `VpcName` (both DB stacks) | `Primary` / `Secondary` | the `VpcName` the VPC StackSet instance was created with |
+| `SourceDBInstanceID`, `SourceDBRegion` (replica) | `mydbinstance`, `us-east-1` | the primary's `DBInstanceID` and region |
+| `MonitoringRoleName` (replica) | `MyDBEnhancedMonitoringRole` | the role `rds-primary.yaml` creates. IAM is global, so the replica reuses it instead of creating a second one |
+| `AdminCidr` (VPC) | none, required | your own address or VPN range. The application security group's SSH rule points at it, and its `AllowedPattern` rejects `0.0.0.0/0` |
+
 
 ## Create role AWSCloudFormationStackSetAdministrationRole in the root account
 
@@ -29,8 +59,12 @@ aws cloudformation create-stack-set \
     --stack-set-name MyStackSet \
     --template-body file://vpc.yaml \
     --description "VPC" \
-    --parameters  ParameterKey=VpcName,ParameterValue=Primary
+    --parameters  ParameterKey=VpcName,ParameterValue=Primary \
+                  ParameterKey=AdminCidr,ParameterValue=203.0.113.10/32
 ```
+
+`AdminCidr` has no default, so `create-stack-set` needs a value for it here even though
+each instance below overrides it from its own parameter file.
 
 ## Create instances
 
@@ -59,9 +93,19 @@ aws cloudformation create-stack --stack-name MyStackSet-DB --template-body file:
 
 **Note:** Wait until the previous stack finalizes (aka, CREATE_COMPLETE || UPDATE_COMPLETE)
 
+Every parameter in `rds-secondary.yaml` has a default matching the primary above, so this
+needs none. Pass `SourceDBInstanceID`, `SourceDBRegion` or `VpcName` if you changed them.
+The source used to be hardcoded as
+`arn:aws:rds:us-east-1:your-admin-account-id:db:mydbinstance`, which meant the template
+could not deploy at all without editing it first.
+
 ```shell
 aws --region us-west-1 cloudformation create-stack --stack-name MyStackSet-DB --template-body file://rds-secondary.yaml
 ```
+
+The replica sets no `StorageEncrypted`. A read replica inherits encryption from its source
+and setting it alongside `SourceDBInstanceIdentifier` is rejected outright, so the
+primary's `StorageEncrypted: true` is what encrypts both.
 
 ## Create EC2 client (default region)
 
@@ -101,14 +145,22 @@ sudo yum -y install mysql
 
 ### Connect to the DB
 
+Read the credentials back out of the secret rather than retyping them, and use `-p` with no
+argument so the password is prompted for instead of landing in your shell history and in
+`ps` output for every other user on the box:
+
 ```shell
-mysql --host=rds_endpoint --user=myname --password=password mydb
+creds=$(aws secretsmanager get-secret-value --secret-id rds/primary \
+  --query SecretString --output text)
+host=$(aws cloudformation describe-stacks --stack-name MyStackSet-DB \
+  --query 'Stacks[0].Outputs[?OutputKey==`DBEndpoint`].OutputValue' --output text)
+
+mysql --host="$host" --user="$(echo "$creds" | python3 -c 'import json,sys;print(json.load(sys.stdin)["username"])')" -p mydb
 ```
 
-mysql --host=mydbinstance.cdyj3fol1p4g.us-east-1.rds.amazonaws.com --user=dbuser --password=****** mydb
-
-
-mysql --host=mydbinstancereplica.czjqr4qz6vgt.us-west-1.rds.amazonaws.com --user=dbuser --password=****** mydb
+The endpoints look like
+`mydbinstance.cdyj3fol1p4g.us-east-1.rds.amazonaws.com` and
+`mydbinstancereplica.czjqr4qz6vgt.us-west-1.rds.amazonaws.com`.
 
 ### Create a table
 

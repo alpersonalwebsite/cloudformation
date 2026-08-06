@@ -127,3 +127,14 @@ Resources:
       # 60 second granularity is the cheapest interval that still shows a spike.
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt MyDBRole.Arn
+
+Outputs:
+  # The endpoint was only discoverable from the console or a describe-db-instances call.
+  # An output means the README can show a copy-pasteable connect command.
+  DBEndpoint:
+    Description: Connection endpoint for the primary DB instance
+    Value: !GetAtt MyDB.Endpoint.Address
+
+  DBPort:
+    Description: Port the database listens on
+    Value: !GetAtt MyDB.Endpoint.Port

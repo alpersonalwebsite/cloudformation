@@ -89,3 +89,14 @@ Resources:
       MonitoringRoleArn: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${MonitoringRoleName}'
       VPCSecurityGroups:
         - Fn::ImportValue: !Sub '${VpcName}-DatabaseSecurityGroup'
+
+Outputs:
+  # The endpoint was only discoverable from the console or a describe-db-instances call.
+  # An output means the README can show a copy-pasteable connect command.
+  DBEndpoint:
+    Description: Connection endpoint for the read replica
+    Value: !GetAtt MyDBreplica.Endpoint.Address
+
+  DBPort:
+    Description: Port the database listens on
+    Value: !GetAtt MyDBreplica.Endpoint.Port
