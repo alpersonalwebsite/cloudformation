@@ -34,7 +34,7 @@ Resources:
               php: []
           files: 
             /var/www/html/index.php:
-              content: !Sub |
+              content: |
                 <?php print "Hello world Abs was here!"; ?>
           services: 
             sysvinit:

@@ -7,19 +7,26 @@ Parameters:
     Default: 'YourService'
 
   VpcID:
-    Description: The VPC ID
-    Type: String
-    Default: vpc-******
+    Description: The VPC the cluster and its client live in
+    # AWS::EC2::VPC::Id rather than String: the console offers a dropdown of real VPCs
+    # and a typo is rejected at validate time instead of failing mid-create. The old
+    # placeholder default (vpc-******) was not a deployable value anyway, so there is
+    # nothing to keep.
+    Type: AWS::EC2::VPC::Id
 
   PrivateSubnet1CIDR:
     Description: IP range subnet AZ1
     Type: String
-    Default: '*.*.10.0/24'
+    Default: '10.0.10.0/24'
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/(1[6-9]|2[0-8])$'
+    ConstraintDescription: Must be an IPv4 CIDR between /16 and /28.
 
   PrivateSubnet2CIDR:
     Description: IP range subnet AZ2
     Type: String
-    Default: '*.*.11.0/24'
+    Default: '10.0.11.0/24'
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/(1[6-9]|2[0-8])$'
+    ConstraintDescription: Must be an IPv4 CIDR between /16 and /28.
 
 
   # The password is no longer a stack parameter. A NoEcho parameter still travels
@@ -74,7 +81,7 @@ Resources:
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Sub ${VpcID}
+      VpcId: !Ref VpcID
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Ref PrivateSubnet2CIDR
       MapPublicIpOnLaunch: false
@@ -94,7 +101,7 @@ Resources:
           ToPort: 5432
           SourceSecurityGroupId: !Ref ClientSecurityGroup
           Description: PostgreSQL from the client security group only
-      VpcId: !Sub ${VpcID}
+      VpcId: !Ref VpcID
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-sec-group
@@ -105,7 +112,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub ${AWS::StackName} CLIENT security group
-      VpcId: !Sub ${VpcID}
+      VpcId: !Ref VpcID
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -144,6 +151,10 @@ Resources:
       EnableHttpEndpoint: true
       Engine: aurora-postgresql
       EngineMode: serverless
+      # 10.7 is what this template was written against. RDS no longer accepts it for NEW
+      # clusters (cfn-lint W3690: "deprecated and cannot be used to create new RDS DB
+      # clusters"), so a deploy today fails until you raise it. Kept for period accuracy;
+      # pass a supported version via a parameter or edit this line when you deploy.
       EngineVersion: 10.7
       BackupRetentionPeriod: 35
       DeletionProtection: false # turn true once it is final

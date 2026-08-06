@@ -6,5 +6,9 @@
     {
         "ParameterKey": "DBSecretName",
         "ParameterValue": "rds/primary"
+    },
+    {
+        "ParameterKey": "VpcName",
+        "ParameterValue": "Primary"
     }
 ]

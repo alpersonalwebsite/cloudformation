@@ -4,12 +4,11 @@
         "ParameterValue": "YourService"
     },
     {
-      "ParameterKey": "VpcID",
-      "ParameterValue": "vpc-******"
+        "ParameterKey": "VpcID",
+        "ParameterValue": "vpc-0123456789abcdef0"
     },
     {
         "ParameterKey": "PublicSubnetCIDR",
-        "ParameterValue": "*.*.12.0/24"
+        "ParameterValue": "10.0.12.0/24"
     }
 ]
-  

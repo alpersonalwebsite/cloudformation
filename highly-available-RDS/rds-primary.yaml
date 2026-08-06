@@ -53,22 +53,32 @@ Parameters:
     MinLength: 1
 
 
+  VpcName:
+    Description: >-
+      The VpcName the VPC stack was deployed with. Its exports are named
+      <VpcName>-PRIV1-SN and so on, so this has to match or Fn::ImportValue fails at
+      create time with "No export named ... found".
+    Type: String
+    Default: Primary
+    MinLength: 1
+
 Resources:
   myDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: DB Subnet Group
       SubnetIds:
-        - Fn::ImportValue: !Sub 'Primary-PRIV1-SN'
-        - Fn::ImportValue: !Sub 'Primary-PRIV2-SN'
+        - Fn::ImportValue: !Sub '${VpcName}-PRIV1-SN'
+        - Fn::ImportValue: !Sub '${VpcName}-PRIV2-SN'
 
   MyDBRole:
     Type: 'AWS::IAM::Role'
     Properties:
       RoleName: MyDBEnhancedMonitoringRole
-      # This is an AWS managed policy
+      # This is an AWS managed policy. !Sub on the partition so the template also works
+      # in GovCloud and China, where the ARN prefix is not 'aws'.
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
       Path: /
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -87,7 +97,7 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       DBSubnetGroupName: !Ref myDBSubnetGroup
       VPCSecurityGroups:
-        - Fn::ImportValue: !Sub 'Primary-DatabaseSecurityGroup'
+        - Fn::ImportValue: !Sub '${VpcName}-DatabaseSecurityGroup'
       MultiAZ: true
       Engine: MySQL
       # 8.0.17 is what this template was written against. RDS no longer accepts it for
@@ -109,5 +119,11 @@ Resources:
         - slowquery
       MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecretName}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecretName}:SecretString:password}}'
-      # MonitoringInterval: '60'
-      # MonitoringRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/AWSCloudFormationStackSetExecutionRole
+      # Enhanced monitoring (checkov CKV_AWS_118). This was commented out while MyDBRole
+      # above was still created, so the template made an IAM role complete with the
+      # AmazonRDSEnhancedMonitoringRole policy and then never used it. The commented ARN
+      # also pointed at AWSCloudFormationStackSetExecutionRole, which is a different role
+      # entirely and would not have been assumable by monitoring.rds.amazonaws.com.
+      # 60 second granularity is the cheapest interval that still shows a spike.
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt MyDBRole.Arn

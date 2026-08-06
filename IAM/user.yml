@@ -25,6 +25,18 @@ Parameters:
     Type: String
 
 Resources:
+  UserGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      Path: /
+
+  AddUserToGroup:
+    Type: AWS::IAM::UserToGroupAddition
+    Properties:
+      GroupName: !Ref UserGroup
+      Users:
+        - !Ref User
+
   User:
     Type: AWS::IAM::User
     Properties:
@@ -74,5 +86,8 @@ Resources:
               - iam:ResyncMFADevice
               - iam:ListMFADevices
             Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${!aws:username}
-      Users:
-        - !Ref User
+      # Attached to a group, not straight to the user (checkov CKV_AWS_40). With one
+      # user the two are equivalent; with five, per-user attachments are how people end
+      # up unable to answer "who can do this?" without reading every user in turn.
+      Groups:
+        - !Ref UserGroup

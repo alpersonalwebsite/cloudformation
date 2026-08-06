@@ -1,7 +1,10 @@
 [
     {
-      "ParameterKey": "EnvironmentName",
-      "ParameterValue": "DockerECSonFargate"
+        "ParameterKey": "EnvironmentName",
+        "ParameterValue": "DockerECSonFargate"
+    },
+    {
+        "ParameterKey": "CertificateArn",
+        "ParameterValue": ""
     }
-  ]
-  
+]

@@ -5,11 +5,32 @@ Parameters:
     Description: An environment name that will be prefixed to resource names
     Type: String
 
+  CertificateArn:
+    Description: >-
+      ARN of an ACM certificate in this region, for the HTTPS listener. Leave it empty and
+      the stack deploys HTTP only, exactly as the original template did. Supply one and a
+      TLS 1.2 listener is added on 443 and port 80 becomes a 301 redirect to it.
+    Type: String
+    Default: ''
+
+Conditions:
+  # An HTTPS listener needs a certificate, and there is no sensible default for one, so
+  # the TLS resources are conditional rather than mandatory. That keeps `aws cloudformation
+  # deploy` working for someone reading this repo who has no certificate to hand.
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+
 Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: 'web-app'
+      # Container Insights (checkov CKV_AWS_65). It is the difference between "the task
+      # died" and knowing which task, on which container instance, and what its CPU and
+      # memory looked like when it did. It bills as CloudWatch custom metrics, so it is
+      # not free; the log group above keeps a 1 day retention for the same reason.
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
 
   # LoadBalancer:
   #   Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -68,17 +89,57 @@ Resources:
         - Fn::ImportValue: !Sub '${EnvironmentName}-PUB2-SN'
       SecurityGroups:
         - Ref: LBSecGroup
+      LoadBalancerAttributes:
+        # Access logging (checkov CKV_AWS_91). Without it there is no record of what was
+        # requested, which is the one thing you want after an incident.
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref LBAccessLogsBucket
+        # Headers that are not valid HTTP are dropped instead of being handed to the
+        # targets (checkov CKV_AWS_131), which is what closes the desync/smuggling class
+        # of tricks where the load balancer and the backend disagree on a request.
+        - Key: routing.http.drop_invalid_header_fields.enabled
+          Value: 'true'
+    # The bucket policy must exist before the load balancer, because Elastic Load
+    # Balancing writes a test object at creation time and fails the stack if it cannot.
+    DependsOn: LBAccessLogsBucketPolicy
 
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
+      # With a certificate, port 80 exists only to send clients to 443. Without one it
+      # forwards, so the demo still works over plain HTTP.
+      DefaultActions: !If
+        - HasCertificate
+        - - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              StatusCode: HTTP_301
+        - - Type: forward
+            TargetGroupArn: !Ref LoadBalancerTargetGroup
+      LoadBalancerArn:
+        Ref: LoadBalancer
+      Port: 80
+      Protocol: 'HTTP'
+  # TLS 1.2 only (checkov CKV_AWS_2 and CKV_AWS_103). ELBSecurityPolicy-TLS-1-2-2017-01
+  # is the oldest policy that excludes TLS 1.0 and 1.1 outright, so it is both correct
+  # and available to a template of this vintage.
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasCertificate
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref LoadBalancerTargetGroup
       LoadBalancerArn:
         Ref: LoadBalancer
-      Port: 80
-      Protocol: 'HTTP'
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
 
   # LoadBalancerListener:
   #   Type: AWS::ElasticLoadBalancingV2::Listener
@@ -133,6 +194,60 @@ Resources:
       RetentionInDays: 1
 
 
+
+  LBAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    # No BucketName: the name is generated. EnvironmentName carries capitals in the
+    # committed parameter files and bucket names must be lowercase.
+    Properties:
+      # ALB access log delivery supports SSE-S3 only. A KMS key here makes delivery fail
+      # with an access-denied that is very hard to trace back to encryption.
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-access-logs
+            Status: Enabled
+            ExpirationInDays: 90
+    Metadata:
+      checkov:
+        skip:
+          - id: CKV_AWS_18
+            comment: >-
+              This IS the log bucket. S3 server access logging on it would either need a
+              second bucket that has the same problem, or point at itself and log its own
+              log writes forever.
+
+  LBAccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LBAccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # The log delivery service principal, which is what AWS documents today and
+          # which works in every region. Regions that existed before August 2022 also
+          # still accept the older policy naming a per-region Elastic Load Balancing
+          # account ID; see the README.
+          - Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:${AWS::Partition}:s3:::${LBAccessLogsBucket}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              ArnLike:
+                # Only load balancers in this account and region may write here.
+                aws:SourceArn: !Sub 'arn:${AWS::Partition}:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/*'
+
 Outputs:
   Cluster:
     Value: !Ref ECSCluster
@@ -146,8 +261,10 @@ Outputs:
       Name: !Sub ${EnvironmentName}-LoadBalancerDNS
 
   Listener:
-    Description: Load Balancer Listener
-    Value: !Ref Listener
+    Description: >-
+      The listener that container.yml attaches its rules to: the HTTPS one when a
+      certificate was supplied, otherwise the HTTP one.
+    Value: !If [HasCertificate, !Ref HttpsListener, !Ref Listener]
     Export:
       Name: !Sub ${EnvironmentName}-Listener
 
