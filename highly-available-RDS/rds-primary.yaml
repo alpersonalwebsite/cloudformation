@@ -36,27 +36,22 @@ Parameters:
     MaxValue: '30'
     ConstraintDescription: must be between 20 and 30 GiB.
 
-  DBUsername:
-    NoEcho: true
-    Description: Username for MySQL database access
-    Type: String
-    MinLength: '1'
-    MaxLength: '16'
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
 
-  DBPassword:
-    NoEcho: true
-    Description: Password MySQL database access
+  # Not a NoEcho parameter any more: a NoEcho value still travels through the API call,
+  # the CLI history and any CI log that echoes the command (cfn-lint W1011). A dynamic
+  # reference is resolved by CloudFormation at deploy time and never lands in the
+  # template, the stack events or a describe-stacks response.
+  #
+  #   aws secretsmanager create-secret --name rds/primary \
+  #     --secret-string '{"username":"dbuser","password":"<generated>"}'
+  DBSecretName:
+    Description: >-
+      Name or ARN of a Secrets Manager secret holding a JSON body with "username" and
+      "password" keys.
     Type: String
-    MinLength: '8'
-    MaxLength: '41'
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: must contain only alphanumeric characters.
+    Default: rds/primary
+    MinLength: 1
 
-  RegionForDBReplica:
-    Default: 'us-west-1'
-    Type: String
 
 Resources:
   myDBSubnetGroup:
@@ -95,8 +90,24 @@ Resources:
         - Fn::ImportValue: !Sub 'Primary-DatabaseSecurityGroup'
       MultiAZ: true
       Engine: MySQL
+      # 8.0.17 is what this template was written against. RDS no longer accepts it for
+      # NEW instances (cfn-lint W3691: "deprecated and cannot be used to create new RDS
+      # DB instances"), so a deploy today fails until you raise it. Kept for period
+      # accuracy; pass a supported 8.0.x via EngineVersion when you deploy.
       EngineVersion: 8.0.17
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      # Encryption at rest was absent (checkov CKV_AWS_16), while the Aurora template in
+      # this repo sets it. It can only be enabled at creation time, so retrofitting a
+      # live instance means a snapshot-and-restore.
+      StorageEncrypted: true
+      # A "highly available" database with no backups is not one. 7 days of automated
+      # backups, and deletion protection so a stack delete cannot take the data with it.
+      BackupRetentionPeriod: 7
+      DeletionProtection: true
+      CopyTagsToSnapshot: true
+      EnableCloudwatchLogsExports:
+        - error
+        - slowquery
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecretName}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecretName}:SecretString:password}}'
       # MonitoringInterval: '60'
       # MonitoringRoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/AWSCloudFormationStackSetExecutionRole

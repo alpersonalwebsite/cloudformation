@@ -26,6 +26,20 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
 
+  # The source used to be hardcoded as
+  # arn:aws:rds:us-east-1:your-admin-account-id:db:mydbinstance, so the template could
+  # not deploy without editing it, and the placeholder account id was easy to miss.
+  SourceDBInstanceID:
+    Default: mydbinstance
+    Description: Identifier of the primary DB instance being replicated.
+    Type: String
+    MinLength: 1
+  SourceDBRegion:
+    Default: us-east-1
+    Description: Region the primary DB instance lives in.
+    Type: String
+    MinLength: 1
+
 Resources:
   myDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -41,8 +55,14 @@ Resources:
       DBInstanceIdentifier: !Ref DBInstanceID
       DBName: !Ref DBName
       DBInstanceClass: !Ref DBInstanceClass
-      SourceDBInstanceIdentifier: arn:aws:rds:us-east-1:your-admin-account-id:db:mydbinstance
-      SourceRegion: us-east-1
+      SourceDBInstanceIdentifier: !Sub arn:${AWS::Partition}:rds:${SourceDBRegion}:${AWS::AccountId}:db:${SourceDBInstanceID}
+      SourceRegion: !Ref SourceDBRegion
+      # No StorageEncrypted here. A read replica inherits encryption from its source,
+      # and setting it is rejected: cfn-lint E3020, "'StorageEncrypted' should not be
+      # included with 'SourceDBInstanceIdentifier'". The primary sets it, so the replica
+      # is encrypted too. checkov CKV_AWS_16 still flags this resource, which is a false
+      # positive for a replica.
+      CopyTagsToSnapshot: true
       DBSubnetGroupName: !Ref myDBSubnetGroup
       # MonitoringInterval: '60'
       # MonitoringRoleArn: !Ref MyDBRole

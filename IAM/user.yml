@@ -6,10 +6,19 @@ Parameters:
     NoEcho: true
     Type: String
 
-  UserPassword:
-    Description: User password
-    NoEcho: true
+  # Not a NoEcho parameter (cfn-lint W1011). The console password is read from Secrets
+  # Manager at deploy time, so it never appears in the template, the stack events or a
+  # describe-stacks response.
+  #
+  #   aws secretsmanager create-secret --name iam/initial-console-password \
+  #     --secret-string '{"password":"<generated>"}'
+  UserSecretName:
+    Description: >-
+      Name or ARN of a Secrets Manager secret holding a JSON body with a "password" key,
+      used as the initial console password.
     Type: String
+    Default: iam/initial-console-password
+    MinLength: 1
 
   Department:
     Description: User belongs to...?
@@ -21,11 +30,19 @@ Resources:
     Properties:
       UserName: !Ref UserName
       LoginProfile:
-        Password: !Ref UserPassword
+        Password: !Sub '{{resolve:secretsmanager:${UserSecretName}:SecretString:password}}'
+        PasswordResetRequired: true
       Tags:
         - Key: Department
           Value: !Ref Department
 
+  # The policy is called OwnAccessKeysAndMFA, and with Resource: '*' it was nothing of
+  # the kind: iam:CreateAccessKey on every user means anyone holding this policy could
+  # mint credentials for an administrator and use them. Scoping to
+  # arn:aws:iam::*:user/${aws:username} is what makes the name true, and it is the
+  # pattern in AWS's own "allow users to manage their own credentials" documentation.
+  # ${aws:username} is an IAM policy variable, so it stays a literal in the template:
+  # ${!aws:username} escapes it from Fn::Sub, which is why Sub is safe to use here.
   BasicCustomIAMPermissions:
     Type: AWS::IAM::Policy
     Properties:
@@ -33,7 +50,8 @@ Resources:
       PolicyDocument:
         Version: 2012-10-17
         Statement:
-          - Effect: Allow
+          - Sid: ManageOwnAccessKeys
+            Effect: Allow
             Action:
               - iam:CreateAccessKey
               - iam:DeleteAccessKey
@@ -41,15 +59,20 @@ Resources:
               - iam:GetUser
               - iam:ListAccessKeys
               - iam:UpdateAccessKey
-            Resource: '*'
-          - Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${!aws:username}
+          - Sid: ManageOwnVirtualMFADevice
+            Effect: Allow
+            Action:
+              - iam:CreateVirtualMFADevice
+              - iam:DeleteVirtualMFADevice
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:mfa/${!aws:username}
+          - Sid: ManageOwnMFAEnrolment
+            Effect: Allow
             Action:
               - iam:DeactivateMFADevice
-              - iam:DeleteVirtualMFADevice
               - iam:EnableMFADevice
               - iam:ResyncMFADevice
-              - iam:CreateVirtualMFADevice
               - iam:ListMFADevices
-            Resource: '*'
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${!aws:username}
       Users:
         - !Ref User

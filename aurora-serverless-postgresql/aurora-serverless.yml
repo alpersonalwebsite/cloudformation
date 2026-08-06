@@ -21,15 +21,22 @@ Parameters:
     Type: String
     Default: '*.*.11.0/24'
 
-  MasterUsername:
-    Description: DB master username
-    NoEcho: true
-    Type: String
 
-  MasterUserPassword:
-    Description: DB master password
-    NoEcho: true
+  # The password is no longer a stack parameter. A NoEcho parameter still travels
+  # through the API call, the CLI history and any CI log that echoes the command, and
+  # cfn-lint flags it as W1011. A dynamic reference is resolved by CloudFormation at
+  # deploy time and never appears in the template, the stack events or a describe call.
+  #
+  # Create the secret first:
+  #   aws secretsmanager create-secret --name aurora/master \
+  #     --secret-string '{"username":"yourdbuser","password":"<generated>"}'
+  DBSecretName:
+    Description: >-
+      Name or ARN of a Secrets Manager secret holding a JSON body with "username" and
+      "password" keys. The values are read at deploy time and never stored in the stack.
     Type: String
+    Default: aurora/master
+    MinLength: 1
 
   DatabaseName:
     Description: DB name
@@ -117,8 +124,8 @@ Resources:
   RDSCluster:
     Type: AWS::RDS::DBCluster
     Properties:
-      MasterUsername: !Ref MasterUsername
-      MasterUserPassword: !Ref MasterUserPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecretName}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecretName}:SecretString:password}}'
       DatabaseName: !Ref DatabaseName # check naming constraints in Amazon RDS
       EnableHttpEndpoint: true
       Engine: aurora-postgresql
@@ -146,7 +153,10 @@ Resources:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       HostedZoneName: !Ref HostedZone
-      Comment: CNAME for !Sub ${AWS::StackName}
+      # ${...} only interpolates inside Fn::Sub. This read "CNAME for !Sub
+      # ${AWS::StackName}", where the tag sits mid-scalar, so YAML treated the whole
+      # thing as literal text and the comment shipped with a stray !Sub in it.
+      Comment: !Sub 'CNAME for ${AWS::StackName}'
       RecordSets:
         - Name: !Join
             - ''
