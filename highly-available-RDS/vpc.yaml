@@ -30,6 +30,14 @@ Parameters:
     Type: String
     Default: 10.1.21.0/24
 
+  AdminCidr:
+    Description: >-
+      CIDR allowed to SSH into instances in the application security group. Use your own
+      address or VPN range, e.g. 203.0.113.10/32. 0.0.0.0/0 is rejected.
+    Type: String
+    AllowedPattern: '^(?!0\.0\.0\.0/0$)(\d{1,3}\.){3}\d{1,3}/(1[6-9]|2\d|3[0-2])$'
+    ConstraintDescription: Must be an IPv4 CIDR no broader than /16, and not 0.0.0.0/0.
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -39,6 +47,10 @@ Metadata:
           - VpcName
           - VpcCIDR
       - Label:
+          default: 'Administrative access'
+        Parameters:
+          - AdminCidr
+      - Label:
           default: 'Information for the VPCs subnets. Subnet network ranges MUST fall within the VPC CIDR block above'
         Parameters:
           - PublicSubnet1CIDR
@@ -47,6 +59,8 @@ Metadata:
           - PrivateSubnet2CIDR
 
     ParameterLabels:
+      AdminCidr:
+        default: 'SSH source CIDR'
       VpcName:
         default: 'VPC Name'
       VpcCIDR:
@@ -191,10 +205,11 @@ Resources:
       GroupDescription: Application Security Group
       GroupName: SecGroup-Application
       SecurityGroupIngress:
-        - Description: SSH from the Internet
+        # Was CidrIp: 0.0.0.0/0, i.e. SSH open to the Internet (checkov CKV_AWS_24).
+        - Description: SSH from the administrator CIDR
           FromPort: 22
           IpProtocol: tcp
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref AdminCidr
           ToPort: 22
       VpcId: !Ref VPC
       Tags:

@@ -25,11 +25,13 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: HTTP from anywhere, which is what a public load balancer is for
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: HTTP to the web server targets
 
   WebServerSecGroup:
     Type: AWS::EC2::SecurityGroup
@@ -38,15 +40,19 @@ Resources:
       VpcId:
         Fn::ImportValue: !Sub '${EnvironmentName}-VPCID'
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        # Sourced from the load balancer's group rather than 0.0.0.0/0: the instances
+        # sit in private subnets and only the LB should reach them.
+        - SourceSecurityGroupId: !Ref LBSecGroup
+          IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          Description: HTTP from the load balancer only
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 0
           ToPort: 65535
           CidrIp: 0.0.0.0/0
+          Description: All outbound, needed to fetch packages and the app bundle
 
   UdacityS3ReadOnlyEC2:
     Type: 'AWS::IAM::Role'
@@ -102,6 +108,10 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: '/dev/sdk'
           Ebs:
+            # Encrypted at rest (checkov CKV_AWS_8). Encryption can only be set when the
+            # volume is created, so an existing stack needs replacement, not an update.
+            Encrypted: true
+            VolumeType: gp2
             VolumeSize: '10'
   
   WebAppGroup:

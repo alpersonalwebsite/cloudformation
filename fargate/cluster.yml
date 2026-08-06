@@ -30,6 +30,7 @@ Resources:
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref 'LBSecGroup'
           IpProtocol: -1
+          Description: All protocols from the load balancer only, which is the sole ingress path
 
   LBSecGroup:
     Type: AWS::EC2::SecurityGroup
@@ -37,19 +38,27 @@ Resources:
       GroupDescription: Allow http to our load balancer
       VpcId:
         Fn::ImportValue: !Sub '${EnvironmentName}-VPCID'
-      # SecurityGroupIngress:
-      #   - IpProtocol: tcp
-      #     FromPort: 80
-      #     ToPort: 80
-      #     CidrIp: 0.0.0.0/0
-      # SecurityGroupEgress:
-      #   - IpProtocol: tcp
-      #     FromPort: 80
-      #     ToPort: 80
-      #     CidrIp: 0.0.0.0/0
+      # This was `CidrIp: 0.0.0.0/0` with `IpProtocol: -1`, which opens every port and
+      # every protocol to the Internet, not just the HTTP the load balancer serves. The
+      # commented-out block below it already had the right shape, so it is now the live
+      # one, with HTTPS added alongside HTTP.
       SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: -1
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from anywhere, redirected to HTTPS by the listener
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from anywhere, which is what a public load balancer is for
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+          Description: TCP to the container targets on their dynamic ports
 
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer

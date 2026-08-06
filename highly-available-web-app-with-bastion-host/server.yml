@@ -18,6 +18,16 @@ Parameters:
     Type: String
 
 
+  # SSH into the bastion used to be open to 0.0.0.0/0 (checkov CKV_AWS_24). A bastion
+  # exists to be the single reachable entry point, which makes restricting it the whole
+  # point rather than an optional extra. No default on purpose.
+  AdminCidr:
+    Description: >-
+      CIDR allowed to SSH into the bastion host. Use your own address or VPN range, e.g.
+      203.0.113.10/32. 0.0.0.0/0 is rejected.
+    Type: String
+    AllowedPattern: '^(?!0\.0\.0\.0/0$)(\d{1,3}\.){3}\d{1,3}/(1[6-9]|2\d|3[0-2])$'
+    ConstraintDescription: Must be an IPv4 CIDR no broader than /16, and not 0.0.0.0/0.
 Resources: 
   LBSecGroup:
     Type: AWS::EC2::SecurityGroup
@@ -30,11 +40,13 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: HTTP from anywhere, which is what a public load balancer is for
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: HTTP to the web server targets
 
   WebServerSecGroup:
     Type: AWS::EC2::SecurityGroup
@@ -47,32 +59,35 @@ Resources:
           IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          #CidrIp: 0.0.0.0/0
+          Description: HTTP from the load balancer only
         - SourceSecurityGroupId: !Ref BastionHostSecGroup
           IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          #CidrIp: 0.0.0.0/0
+          Description: SSH from the bastion host only
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 0
           ToPort: 65535
           CidrIp: 0.0.0.0/0
+          Description: All outbound, needed to fetch packages and the app bundle
 
   BastionHostSecGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH
+      GroupDescription: SSH into the bastion from the administrator CIDR only
       VpcId:
         Fn::ImportValue: !Sub '${EnvironmentName}-VPCID'
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref AdminCidr
+          Description: SSH from the administrator CIDR
       SecurityGroupEgress:
         - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0
+          Description: All outbound, so the bastion can reach the private subnets
 
   UdacityS3ReadOnlyEC2:
     Type: 'AWS::IAM::Role'
@@ -129,6 +144,10 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: '/dev/sdk'
           Ebs:
+            # Encrypted at rest (checkov CKV_AWS_8). Encryption can only be set when the
+            # volume is created, so an existing stack needs replacement, not an update.
+            Encrypted: true
+            VolumeType: gp2
             VolumeSize: '10'
   
   WebAppGroup:
